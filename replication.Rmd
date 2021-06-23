@@ -1,0 +1,1419 @@
+---
+title: "Replication"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#rm(list=ls())
+```
+
+
+## Libraries and user-defined functions
+
+```{r, echo=FALSE}
+source("CODE/functions.R")
+```
+
+
+```{r}
+library(sf)
+library(spdep)
+library(rdrobust) 
+#library(rdd)
+library(ggspatial)
+library(furrr)
+
+#library(ggrepel)
+library(fields)
+library(spdep)
+library(estimatr)
+library(santoku)
+library(patchwork)
+```
+
+
+## Load data
+
+The replication package does not contain actual data as these cannot be publicly shared due to legal reasons. 
+
+The attached file `data_replication.RData` contains table which allows user to test our code, however, it will not yield results reported in the paper. 
+
+Procedure used to generate this table follows (original `rdata` variable is a table with the actual dataset):
+
+```{r}
+# rdata <- rdata %>%
+#   mutate(
+#     across(
+#       -c(KOD_OBEC:year),
+#       sample,
+#       size = nrow(rdata),
+#       replace = FALSE
+#     )
+#   )
+# 
+# save(rdata, file = "data_replication.RData")
+```
+
+Load data:
+
+```{r}
+#load("data_replication.RData")
+```
+
+### Variables 
+
+Variables:
+
+KOD_OBEC = "Municipality ID (CISOB)",
+NAZ_OBEC = "Municipality name",
+KOD_OKRES = "District ID",
+year = "Year",
+so2avg94 = "SO2 concentration in 1994",
+so2avg00 = "SO2 concentration in 2000",
+pop_b = "Population as of January 1st",
+emig = "Total emigration as of December 31st",
+immig = "Total immigration as of December 31st",
+netm = "Total net immigration as of December 31st",
+emig_rate = "Emigration rate (%)",
+immig_rate = "Immigration rate (%)",
+netm_rate = "Net immigration rate (%)",
+pop_rate = "Population growth (%)",
+benefits_ti = "municipality eligible for benefits (treatment intensity)",
+benefits_ti_ea = "municipality eligible for benefits (treatment intensity, based on economic activity)",
+benefits = "municipality eligible for benefits (indicator variable)",
+age_20_29 = "Share of 20-29 age group (census, observed)",
+age_30_39 = "Share of 30-39 age group (census, observed)",
+age_40_49 = "Share of 40-49 age group (census, observed)",
+age_50_59 = "Share of 50-59 age group (census, observed)",
+age_60_69 = "Share of 60-69 age group (census, observed)",
+age_70_79 = "Share of 70-79 age group (census, observed)",
+age_20_29_nn = "Share of 20-29 age group (census, nearest neighbor)",
+age_30_39_nn = "Share of 30-39 age group (census, nearest neighbor)",
+age_40_49_nn = "Share of 40-49 age group (census, nearest neighbor)",
+age_50_59_nn = "Share of 50-59 age group (census, nearest neighbor)",
+age_60_69_nn = "Share of 60-69 age group (census, nearest neighbor)",
+age_70_79_nn = "Share of 70-79 age group (census, nearest neighbor)",
+age_20_29_lin = "Share of 20-29 age group (census, linear)",
+age_30_39_lin = "Share of 30-39 age group (census, linear)",
+age_40_49_lin = "Share of 40-49 age group (census, linear)",
+age_50_59_lin = "Share of 50-59 age group (census, linear)",
+age_60_69_lin = "Share of 60-69 age group (census, linear)",
+age_70_79_lin = "Share of 70-79 age group (census, linear)",
+age_20_29_czso = "Share of 20-29 age group (census and registry data)",
+age_30_39_czso = "Share of 30-39 age group (census and registry data)",
+age_40_49_czso = "Share of 40-49 age group (census and registry data)",
+age_50_59_czso = "Share of 50-59 age group (census and registry data)",
+age_60_69_czso = "Share of 60-69 age group (census and registry data)",
+age_70_79_czso = "Share of 70-79 age group (census and registry data)",
+edu_low_sh = "Share of primary educated (census)",
+edu_sec_sh = "Share of secondary educated (census)",
+edu_ter_sh = "Share of tertiary educated (census)",
+edu_low_sh_nn = "Share of primary educated (census, nearest neighbor)",
+edu_sec_sh_nn = "Share of secondary educated (census, nearest neighbor)",
+edu_ter_sh_nn = "Share of tertiary educated (census, nearest neighbor)",
+edu_low_sh_lin = "Share of primary educated (census, linear)",
+edu_sec_sh_lin = "Share of secondary educated (census, linear)",
+edu_ter_sh_lin = "Share of tertiary educated (census, linear)",
+ppdist_Komorany = "Distance to a power plant (Komorany, km)",
+ppdist_Ledvice = "Distance to a power plant (Ledvice, km)",
+ppdist_Pocerady = "Distance to a power plant (Pocerady, km)",
+ppdist_Prunerov = "Distance to a power plant (Prunerov, km)",
+ppdist_Tusimice = "Distance to a power plant (Tusimice, km)",
+ppdist_Litvinov = "Distance to a power plant (Litvinov, km)",
+ppprox_Komorany = "Power plant in municipality (Komorany, 0 = no, 1 = yes, 2 = neighboring municipalities)",
+ppprox_Ledvice = "Power plant in municipality (Ledvice, 0 = no, 1 = yes, 2 = neighboring municipalities)",
+ppprox_Litvinov = "Power plant in municipality (Litvinov, 0 = no, 1 = yes, 2 = neighboring municipalities)",
+ppprox_Pocerady = "Power plant in municipality (Pocerady, 0 = no, 1 = yes, 2 = neighboring municipalities)",
+ppprox_Prunerov = "Power plant in municipality (Prunerov, 0 = no, 1 = yes, 2 = neighboring municipalities)",
+ppprox_Tusimice = "Power plant in municipality (Tusimice, 0 = no, 1 = yes, 2 = neighboring municipalities)",
+ger_share = "Share of ethnic Germans in 1930",
+PHAdist = "Distance to Prague (country capital)",
+CZdist = "Distance to the country border",
+altitude = "Altitude (m)",
+TRI = "Terrain roughness",
+Udos = "Unemployment rate (U/Pop 15-64)",
+area_segment = "Area ID",
+refpoint_lon = "Municipality reference point: longitude",
+refpoint_lat = "Municipality reference point: latitude",
+centroid_lon = "Municipality centroid: longitude",
+centroid_lat = "Municipality centroid: latitude",
+group1_0km = "Number of man-made amenities in the municipality (Group 1)",
+group2_0km = "Number of man-made amenities in the municipality (Group 2)",
+group3_0km = "Number of man-made amenities in the municipality (Group 3)",
+group1_20km = "Number of man-made amenities within 20 km driving distance (Group 1)",
+group2_20km = "Number of man-made amenities within 20 km driving distance (Group 2)",
+group3_20km = "Number of man-made amenities within 20 km driving distance (Group 3)"
+
+
+### Estimation sample
+
+```{r}
+rdata_mig <- rdata %>% 
+  filter(year >= 1983, year <= 2015) %>% 
+  filter(year <= 1989 | year >= 2000) %>% 
+  filter(so2avg94 < 70) %>% 
+  mutate(
+    period = case_when(
+      year < 1995 ~ "prior",
+      year > 1995 ~ "after"
+    )
+  ) %>% 
+  drop_na(emig_rate) %>% 
+  filter(pop_b > 0)
+```
+
+## Descriptive statistics
+
+### Time-inavriant characteristcs
+
+```{r}
+rdata_mig %>% 
+  filter(year == 2011) %>% 
+  select(KOD_OBEC,so2avg94, period, ger_share, altitude, starts_with("group")) %>% 
+  pivot_longer(-c(KOD_OBEC,so2avg94, period)) %>% 
+  split(.$name) %>% 
+  map(function(x) descstat_lm(so2avg94, period, xdata = x)) %>% 
+  bind_rows(.id = "variable") %>% 
+  filter(period == "after") %>% 
+  mutate(so2avg94 = as.character(so2avg94)) %>% 
+  replace_na(list(so2avg94 = "all")) %>% 
+  select(-period,-type) %>% 
+  pivot_longer(c(estimate,std.error)) %>% 
+  pivot_wider(names_from = so2avg94) %>% 
+  mutate(
+    variable = ifelse((row_number() %/% 2)*2 == row_number(),"",variable)
+  ) %>% 
+  mutate(
+    year = ifelse(variable == "ger_share","1930",""),
+    year = ifelse(str_detect(variable,"group"),"1993",year)
+    ) %>% 
+    mutate(
+      variable = case_when(
+        variable == "altitude" ~ "Altitude (m)",
+        variable == "ger_share" ~ "Share of ethnic Germans (\\%)",
+        variable == "group1_0km" ~ "Man-made amenities in the municipality (Education and health, n)",
+        variable == "group2_0km" ~ "Man-made amenities in the municipality (Culture and sports, n)",
+        variable == "group3_0km" ~ "Man-made amenities in the municipality (Public administration, n)",
+        variable == "group1_20km" ~ "Man-made amenities within 20 km driving distance (Education and health, n)",
+        variable == "group2_20km" ~ "Man-made amenities within 20 km driving distance (Culture and sports, n)",
+        variable == "group3_20km" ~ "Man-made amenities within 20 km driving distance (Public administration, n)",
+        TRUE ~ ""
+      )
+    ) %>% 
+  select(variable,year,all,`30`:`60`)
+```
+### Characteristics changing over time
+
+```{r}
+rdata %>% 
+  filter(year %in% c(1980,1991,2001,2011)) %>% 
+  mutate(
+    period = case_when(
+      year < 1995 ~ "prior",
+      year > 1995 ~ "after"
+    )
+  ) %>% 
+  filter(so2avg94 < 70) %>%
+  select(KOD_OBEC,year,
+        starts_with("so2"),
+        age_20_29,
+        age_30_39,
+        age_40_49,
+        age_50_59,
+        age_60_69,
+        age_70_79,
+        edu_low_sh,
+        edu_sec_sh,
+        edu_ter_sh,
+        pop_b) %>% 
+  mutate(
+    so2 = as.character(so2avg94)
+    ) %>% 
+  pivot_longer(-c(KOD_OBEC,so2,year)) %>% 
+  mutate(
+    name = str_c(name,"__",year)
+  ) %>% 
+  select(-year) %>% 
+  drop_na() %>% 
+  split(.$name) %>% 
+  map(function(x) descstat_lm(so2, xdata = x, xformula = as.Formula(value ~ 1))) %>% 
+  bind_rows(.id = "variable") %>% 
+  filter(type == "mean") %>% 
+  separate(variable, c("variable","year"), sep="__") %>% 
+  select(-type) %>% 
+  replace_na(list(so2 = "all")) %>% 
+  pivot_longer(c(estimate,std.error)) %>% 
+  pivot_wider(names_from = so2, values_from = value) %>% 
+  mutate(
+    variable = case_when(
+      variable == "so2avg94" ~ "SO2 concentration in 1994",
+      variable == "so2avg00" ~ "SO2 concentration in 2000",
+      variable == "age_20_29" ~ "Share of 20-29 age group (census, observed)",
+      variable == "age_30_39" ~ "Share of 30-39 age group (census, observed)",
+      variable == "age_40_49" ~ "Share of 40-49 age group (census, observed)",
+      variable == "age_50_59" ~ "Share of 50-59 age group (census, observed)",
+      variable == "age_60_69" ~ "Share of 60-69 age group (census, observed)",
+      variable == "age_70_79" ~ "Share of 70-79 age group (census, observed)",
+      variable == "edu_low_sh" ~ "Share of primary educated (census)",
+      variable == "edu_sec_sh" ~ "Share of secondary educated (census)",
+      variable == "edu_ter_sh" ~ "Share of tertiary educated (census)",
+      variable == "pop_b" ~ "Population as of January 1st",
+      TRUE ~ ""
+    )
+  ) %>% 
+  arrange(variable,year,name) %>% 
+  mutate(
+    year = ifelse((row_number() %/% 2)*2 == row_number(),"",year)
+  ) %>% 
+  mutate(
+    variable = ifelse(year == 1980, variable, "")
+  ) %>% 
+  select(variable,year,all,`30`:`60`)
+```
+
+### Migration
+
+#### Emigration rate
+```{r}
+dtabs_print <- function(dtb){
+  dtb %>% 
+  pivot_longer(c(estimate,std.error)) %>% 
+  replace_na(list(so2avg94 = "all")) %>% 
+  pivot_wider(names_from = so2avg94) %>% 
+  replace_na(list(period = "diff")) %>% 
+  select(period,all,`30`:`60`) %>% 
+  mutate(
+    period = ifelse((row_number() %/% 2)*2 == row_number(),"",period)
+  ) %>% 
+    mutate(
+      period = case_when(
+        period == "prior" ~ "Pre-desulfurization period (\\%)",
+        period == "after" ~ "Post-desulfurization period (\\%)",
+        period == "diff" ~ "Difference (p.p.)",
+        TRUE ~ ""
+      )
+    )
+}
+
+dtabs <- rdata_mig %>% 
+  select(KOD_OBEC,period,so2avg94,ends_with("rate")) %>% 
+  pivot_longer(ends_with("rate")) %>% 
+  split(.$name) %>% 
+  map(function(x) descstat_lm(so2avg94, period, xdata = x))
+  
+dtabs$emig_rate %>% dtabs_print() #%>% print_latex("FIGURES/tab2_emig_rate.tex")  
+```
+
+#### Immigration rate
+```{r}
+dtabs$immig_rate %>% dtabs_print() #%>% print_latex("FIGURES/tab2_immig_rate.tex")  
+```
+
+#### Net migration rate
+```{r}
+dtabs$netm_rate %>% dtabs_print() #%>% print_latex("FIGURES/tab2_netm_rate.tex")  
+```
+
+### Number of municipalities
+
+```{r}
+rdata_mig %>% 
+  distinct(KOD_OBEC,so2avg94) %>% 
+  group_by(so2avg94) %>% 
+  summarise(
+    Municipalities = n() ,
+    .groups = "drop"
+  ) %>%
+  mutate(
+    obs = "Municipalities (n)",
+    all = sum(Municipalities)
+  ) %>% 
+  pivot_wider(names_from = so2avg94, values_from = Municipalities) 
+```
+
+
+
+# Estimation
+
+## Definition of formulas
+
+```{r}
+# Baseline specifications
+model_nl <- as.Formula(
+  X ~ I(period == "after" & so2avg94 == 40) +
+  I(period == "after" & so2avg94 == 50) +
+  I(period == "after" & so2avg94 == 60) + 
+  year:period:area_segment | KOD_OBEC + I(period == "after") | 0 | KOD_OBEC
+)
+
+modell_nl <- list(
+  update(model_nl, emig_rate ~ .),
+  update(model_nl, immig_rate ~ .),
+  update(model_nl, netm_rate ~ .),
+  update(model_nl, pop_rate ~ .)
+)
+
+model_nl_40p <- as.Formula(
+  X ~ I(period == "after" & so2avg94 >= 40) + 
+  year:period:area_segment | KOD_OBEC + I(period == "after") | 0 | KOD_OBEC
+)
+
+
+modell_nl_40p <- list(
+  update(model_nl_40p, netm_rate ~ .),
+  update(model_nl_40p, emig_rate ~ .),
+  update(model_nl_40p, immig_rate ~ .),
+  update(model_nl_40p, pop_rate ~ .)
+)
+
+# Triple DiD
+
+model_benefits <- as.Formula(X ~ I(period == "after" & so2avg94 == 40) + I(period == "after" & 
+    so2avg94 == 40 & benefits) + I(period == "after" & benefits) + year:period:area_segment | 
+      KOD_OBEC + I(period == "after")  | 0 | KOD_OBEC)
+
+modell_benefits <- list(
+  update(model_benefits, emig_rate ~ .),
+  update(model_benefits, immig_rate ~ .),
+  update(model_benefits, netm_rate ~ .),
+  update(model_benefits, pop_rate ~ .)
+)
+
+model_benefitsti <- as.Formula(X ~ I(period == "after" & so2avg94 == 40) + I((period == "after" &
+    so2avg94 == 40)*benefits_ti_ea) + I((period == "after")*benefits_ti_ea) + year:period:area_segment | 
+      KOD_OBEC + I(period == "after")  | 0 | KOD_OBEC)
+
+modell_benefitsti <- list(
+  update(model_benefitsti, emig_rate ~ .),
+  update(model_benefitsti, immig_rate ~ .),
+  update(model_benefitsti, netm_rate ~ .),
+  update(model_benefitsti, pop_rate ~ .)
+)
+
+```
+
+
+## DiD (baseline)
+
+```{r}
+modell_nl_40p %>% 
+  map(felm, data = rdata_mig) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  delete_rows() %>% 
+  mutate(
+    term = ifelse(stat == "std.error","",term)
+  ) %>% 
+  select(term, emig_rate, immig_rate, netm_rate)
+
+modell_nl %>% 
+  map(felm, data = rdata_mig) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  delete_rows() %>% 
+  mutate(
+    term = ifelse(stat == "std.error","",term)
+  ) %>% 
+  select(term, emig_rate, immig_rate, netm_rate)
+```
+
+## Robustness tests
+
+### Unemployment
+```{r}
+rc_unempl <- rdata %>% 
+  mutate(
+    Udos = ifelse(year < 2001, NA, Udos),
+    Udos = ifelse(year <= 1989, 0, Udos)
+  ) %>% 
+  group_by(KOD_OBEC) %>% 
+  arrange(year) %>% 
+  mutate(
+    Udos_L1 = lag(Udos)
+  ) %>% 
+  filter(year >= 1983, year <= 2015) %>% 
+  filter(year <= 1989 | year >= 2000) %>% 
+  filter(so2avg94 < 70) %>% 
+  mutate(
+    period = case_when(
+      year < 1995 ~ "prior",
+      year > 1995 ~ "after"
+    )
+  ) %>% 
+  drop_na(emig_rate) %>% 
+  filter(pop_b > 0)
+  
+rc1 <- modell_nl %>% 
+  map(
+    update, . ~ . + Udos_L1
+  ) %>% 
+  map(felm, data = rc_unempl) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  pivot_longer(emig_rate:pop_rate) %>% 
+  mutate(
+    rc = "U"
+  )
+
+```
+
+### Pollution in post-desulfurization period
+
+```{r}
+rc2 <- modell_nl %>% 
+  map(
+    update, . ~ . + I(period == "after" & so2avg00 == 10) + I(period == "after" & 
+    so2avg00 == 15) + I(period == "after" & so2avg00 == 20)
+  ) %>% 
+  map(felm, data = rdata_mig) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  pivot_longer(emig_rate:pop_rate) %>% 
+  mutate(
+    rc = "so2"
+  )
+
+
+```
+
+### Education
+
+```{r}
+rdata_edu <- rdata_mig %>% select(-starts_with("edu"),-starts_with("age"))
+
+rdata_edu <- rdata %>% 
+  select(KOD_OBEC,year,starts_with("edu"),starts_with("age")) %>% 
+  mutate(
+    age_20_29_nn = ifelse(is.na(age_20_29_czso),age_20_29_nn,age_20_29_czso), 
+    age_30_39_nn = ifelse(is.na(age_30_39_czso),age_30_39_nn,age_30_39_czso), 
+    age_40_49_nn = ifelse(is.na(age_40_49_czso),age_40_49_nn,age_40_49_czso), 
+    age_50_59_nn = ifelse(is.na(age_50_59_czso),age_50_59_nn,age_50_59_czso), 
+    age_60_69_nn = ifelse(is.na(age_60_69_czso),age_60_69_nn,age_60_69_czso), 
+    age_70_79_nn = ifelse(is.na(age_70_79_czso),age_70_79_nn,age_70_79_czso), 
+    age_20_29_lin = ifelse(is.na(age_20_29_czso),age_20_29_lin,age_20_29_czso), 
+    age_30_39_lin = ifelse(is.na(age_30_39_czso),age_30_39_lin,age_30_39_czso), 
+    age_40_49_lin = ifelse(is.na(age_40_49_czso),age_40_49_lin,age_40_49_czso), 
+    age_50_59_lin = ifelse(is.na(age_50_59_czso),age_50_59_lin,age_50_59_czso), 
+    age_60_69_lin = ifelse(is.na(age_60_69_czso),age_60_69_lin,age_60_69_czso), 
+    age_70_79_lin = ifelse(is.na(age_70_79_czso),age_70_79_lin,age_70_79_czso)
+  ) %>% 
+  mutate(
+    year = year + 1
+  ) %>% 
+  left_join(rdata_edu,., by = c("KOD_OBEC", "year"))
+
+# "edu_low_sh"     "edu_sec_sh"     "edu_ter_sh"     "edu_low_sh_nn"  "edu_sec_sh_nn"  "edu_ter_sh_nn"  "edu_low_sh_lin"
+# [10] "edu_sec_sh_lin" "edu_ter_sh_lin" "age_20_29"      "age_30_39"      "age_40_49"      "age_50_59"      "age_60_69"      "age_70_79"      "age_20_29_nn"  
+# [19] "age_30_39_nn"   "age_40_49_nn"   "age_50_59_nn"   "age_60_69_nn"   "age_70_79_nn"   "age_20_29_lin"  "age_30_39_lin"  "age_40_49_lin"  "age_50_59_lin" 
+# [28] "age_60_69_lin"  "age_70_79_lin"  "age_20_29_czso" "age_30_39_czso" "age_40_49_czso" "age_50_59_czso" "age_60_69_czso" "age_70_79_czso"
+  
+rc3 <- modell_nl %>% 
+  map(
+    update, . ~ . + edu_sec_sh_nn + edu_ter_sh_nn + age_20_29_nn + age_30_39_nn + age_40_49_nn + age_50_59_nn + age_60_69_nn 
+  ) %>% 
+  map(felm, data = rdata_edu) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  pivot_longer(emig_rate:pop_rate) %>% 
+  mutate(
+    rc = "nn"
+  )
+
+rc4 <- modell_nl %>% 
+  map(
+    update, . ~ . + edu_sec_sh_lin + edu_ter_sh_lin + age_20_29_lin + age_30_39_lin + age_40_49_lin + age_50_59_lin + age_60_69_lin
+  ) %>% 
+  map(felm, data = rdata_edu) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  pivot_longer(emig_rate:pop_rate) %>% 
+  mutate(
+    rc = "lin"
+  )
+
+```
+
+```{r}
+rdata_chom <- rdata %>% 
+  filter(year >= 1983, year <= 2015) %>% 
+  filter(year <= 1989 | year >= 2000) %>% 
+  mutate(
+    so2avg94 = ifelse(so2avg94 > 60, 60, so2avg94)
+  ) %>% 
+  mutate(
+    period = case_when(
+      year < 1995 ~ "prior",
+      year > 1995 ~ "after"
+    )
+  ) %>% 
+  drop_na(emig_rate) %>% 
+  filter(pop_b > 0)
+
+rc5 <- modell_nl %>% 
+  map(felm, data = rdata_chom) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  pivot_longer(emig_rate:pop_rate) %>% 
+  mutate(
+    rc = "chom"
+  )
+
+
+
+```
+
+```{r}
+rdata_bal <- rdata_mig %>% 
+  group_by(KOD_OBEC) %>% 
+  add_tally() %>% 
+  ungroup() %>% 
+  filter(n == max(n))
+
+rc6 <- modell_nl %>% 
+  map(felm, data = rdata_bal) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  pivot_longer(emig_rate:pop_rate) %>% 
+  mutate(
+    rc = "bal"
+  )
+
+
+```
+
+```{r}
+rdata_outl <- rdata_mig %>% 
+  group_by(year) %>% 
+  mutate(
+    top_emig = quantile(emig_rate, probs = 0.99, na.rm = TRUE),
+    top_immig = quantile(immig_rate, probs = 0.99, na.rm = TRUE),
+    top_netm = quantile(netm_rate, probs = 0.99, na.rm = TRUE),
+    top_pop = quantile(pop_rate, probs = 0.99, na.rm = TRUE)
+  ) %>% 
+  ungroup()
+
+rc7 <- list(
+rdata_outl %>% 
+  filter(emig_rate < top_emig) %>%
+  felm(modell_nl[[1]], data = .) %>% 
+  felm_column(),
+rdata_outl %>% 
+  filter(immig_rate < top_immig) %>%
+  felm(modell_nl[[2]], data = .) %>% 
+  felm_column(),
+rdata_outl %>% 
+  filter(netm_rate < top_netm) %>%
+  felm(modell_nl[[3]], data = .) %>% 
+  felm_column(),
+rdata_outl %>% 
+  filter(pop_rate < top_pop) %>%
+  felm(modell_nl[[4]], data = .) %>% 
+  felm_column()
+) %>% 
+  reduce(full_join) %>% 
+  pivot_longer(emig_rate:pop_rate) %>% 
+  mutate(
+    rc = "outl"
+  )
+
+
+```
+
+Export RC tables
+
+```{r}
+rctable <- bind_rows(rc1,rc2,rc3,rc4,rc5,rc6,rc7) %>%
+  filter(name != "pop_rate") %>% 
+  split(.$name) %>%
+  map(
+    function(x){
+      x <- x %>%
+        pivot_wider(names_from = rc) %>%
+        delete_rows()
+
+      xn <- first(x$name)
+
+      x %>%
+        select(-stat, -name) #%>%
+        #print_latex(str_c("FIGURES/robust_",xn,".tex"))
+    }
+  )
+```
+
+### RC tests: Emigration rate
+```{r}
+rctable[[1]] %>% 
+  slice(c(1:6,9,10))
+```
+### RC tests: Immigration rate
+```{r}
+rctable[[2]] %>% 
+  slice(c(1:6,9,10))
+```
+
+### RC tests: Net migration rate
+```{r}
+rctable[[3]] %>% 
+  slice(c(1:6,9,10))
+```
+
+
+### Standard errors adjustment
+This part of the script needs to be run separately due to conflicting dependencies.
+
+```{r, eval=FALSE}
+modell_nl_40p_kelly <- modell_nl_40p %>% 
+  map(formula, collapse = TRUE, update = TRUE) %>% 
+  map(update, .~ . + 1)
+
+modell_nl_kelly <- modell_nl %>% 
+  map(formula, collapse = TRUE, update = TRUE) %>% 
+  map(update, .~ . + 1)
+
+modell_nl_kelly <- c(
+  modell_nl_40p_kelly[1:3],
+  modell_nl_kelly[1:3]
+)
+
+data_nl_kelly <- rdata_mig %>% rename(X = refpoint_lon, Y = refpoint_lat) %>% mutate(id = KOD_OBEC)
+```
+
+#### Robust (outliers exclusion)
+
+```{r, eval = FALSE}
+library(plyr)
+library(sf)
+library(spdep)
+library(rdrobust)
+library(ggspatial)
+library(furrr)
+
+library(fields)
+library(spdep)
+library(estimatr)
+library(santoku)
+library(patchwork)
+
+source("CODE/functions.R")
+source("CODE/spatial_se_panel.R")
+
+## Functions
+
+kelly_wrapper <- function(sm, eq, spdata, maxres){
+    out <- Spatial_HAC_Panel(eq,
+                       spdata,
+                       range_search = seq(from=10,to=150,by=10),
+                       Smoothness = sm,
+                       residual_upper = abs(maxres),
+                       residual_lower = -1*abs(maxres),
+                       opt_method = "REML")
+
+    print(sm)
+
+    return(out)
+}
+
+kelly_wrapper_safely <- safely(kelly_wrapper)
+
+kelly_hac <- function(eq, sm, spdata, maxres = 1000){
+    out <- sm %>%
+        map(
+            kelly_wrapper_safely, eq = eq, spdata = spdata, maxres = maxres
+        )
+
+}
+
+eest <- lm(modell_nl_kelly[[4]], data = data_nl_kelly)
+eest95 <- abs(eest$residuals) %>% quantile(.95)
+
+emig_kl <- kelly_hac(
+    modell_nl_kelly[[4]],
+    sm = seq(from = 0.1, to = 1, by = 0.1),
+    spdata = data_nl_kelly,
+    maxres = eest95
+)
+
+eest <- lm(modell_nl_kelly[[5]], data = data_nl_kelly)
+eest95 <- abs(eest$residuals) %>% quantile(.95)
+
+immig_kl <- kelly_hac(
+    modell_nl_kelly[[5]],
+    sm = seq(from = 0.1, to = 1, by = 0.1),
+    spdata = data_nl_kelly,
+    maxres = eest95
+)
+
+eest <- lm(modell_nl_kelly[[6]], data = data_nl_kelly)
+eest95 <- abs(eest$residuals) %>% quantile(.95)
+
+netm_kl <- kelly_hac(
+    modell_nl_kelly[[6]],
+    sm = seq(from = 0.1, to = 1, by = 0.1),
+    spdata = data_nl_kelly,
+    maxres = eest95
+)
+```
+
+
+
+```{r, eval=FALSE}
+mm <- emig_kl %>% 
+  map_dfr(
+    function(x) x$result$Spatial_Parameters
+  ) %>% 
+  mutate(
+    id = row_number()
+  ) %>% 
+  slice_min(loglik) %>% 
+  pull(id)
+
+ekl <- emig_kl[[mm]]$result$HAC %>% 
+  as_tibble(rownames = "term") %>% 
+  filter(str_detect(term,"so2")) %>% 
+  mutate(
+    hac.p = add_stars(hac.p)
+  ) %>% 
+  format_number() %>% 
+  mutate(
+    coef = str_c(coef,hac.p),
+    hac.se = str_c("(",hac.se,")")
+  ) %>% 
+  select(term:hac.se) %>% 
+  pivot_longer(-term, names_to = "stat")
+
+mm <- immig_kl %>% 
+  map_dfr(
+    function(x) x$result$Spatial_Parameters
+  ) %>% 
+  mutate(
+    id = row_number()
+  ) %>% 
+  slice_min(loglik) %>% 
+  pull(id)
+
+ikl  <- immig_kl[[mm]]$result$HAC %>% 
+  as_tibble(rownames = "term") %>% 
+  filter(str_detect(term,"so2")) %>% 
+  mutate(
+    hac.p = add_stars(hac.p)
+  ) %>% 
+  format_number() %>% 
+  mutate(
+    coef = str_c(coef,hac.p),
+    hac.se = str_c("(",hac.se,")")
+  ) %>% 
+  select(term:hac.se) %>% 
+  pivot_longer(-term, names_to = "stat")
+
+mm <- netm_kl %>% 
+  map_dfr(
+    function(x) x$result$Spatial_Parameters
+  ) %>% 
+  mutate(
+    id = row_number()
+  ) %>% 
+  slice_min(loglik) %>% 
+  pull(id)
+
+nkl <- netm_kl[[mm]]$result$HAC %>% 
+  as_tibble(rownames = "term") %>% 
+  filter(str_detect(term,"so2")) %>% 
+  mutate(
+    hac.p = add_stars(hac.p)
+  ) %>% 
+  format_number() %>% 
+  mutate(
+    coef = str_c(coef,hac.p),
+    hac.se = str_c("(",hac.se,")")
+  ) %>% 
+  select(term:hac.se) %>% 
+  pivot_longer(-term, names_to = "stat")
+
+list(ekl,ikl,nkl) %>% 
+  reduce(left_join, by = c("term","stat")) %>% 
+  select(-stat) 
+```
+
+
+#### All observations
+
+```{r, eval = FALSE}
+library(plyr)
+library(sf)
+library(spdep)
+library(rdrobust)
+library(ggspatial)
+library(furrr)
+
+library(fields)
+library(spdep)
+library(estimatr)
+library(santoku)
+library(patchwork)
+
+source("CODE/functions.R")
+source("CODE/spatial_se_panel.R")
+
+## Functions
+
+kelly_wrapper <- function(sm, eq, spdata, maxres){
+    out <- Spatial_HAC_Panel(eq,
+                       spdata,
+                       range_search = seq(from=10,to=150,by=10),
+                       Smoothness = sm,
+                       residual_upper = abs(maxres),
+                       residual_lower = -1*abs(maxres),
+                       opt_method = "REML")
+
+    print(sm)
+
+    return(out)
+}
+
+kelly_wrapper_safely <- safely(kelly_wrapper)
+
+kelly_hac <- function(eq, sm, spdata, maxres = 1000){
+    out <- sm %>%
+        map(
+            kelly_wrapper_safely, eq = eq, spdata = spdata, maxres = 1000
+        )
+
+}
+
+emig_kl <- kelly_hac(
+    modell_nl_kelly[[4]],
+    sm = seq(from = 0.1, to = 1, by = 0.1),
+    spdata = data_nl_kelly
+)
+
+immig_kl <- kelly_hac(
+    modell_nl_kelly[[5]],
+    sm = seq(from = 0.1, to = 1, by = 0.1),
+    spdata = data_nl_kelly
+)
+
+netm_kl <- kelly_hac(
+    modell_nl_kelly[[6]],
+    sm = seq(from = 0.1, to = 1, by = 0.1),
+    spdata = data_nl_kelly
+)
+```
+
+
+
+```{r, eval=FALSE}
+mm <- emig_kl %>% 
+  map_dfr(
+    function(x) x$result$Spatial_Parameters
+  ) %>% 
+  mutate(
+    id = row_number()
+  ) %>% 
+  slice_min(loglik) %>% 
+  pull(id)
+
+ekl <- emig_kl[[mm]]$result$HAC %>% 
+  as_tibble(rownames = "term") %>% 
+  filter(str_detect(term,"so2")) %>% 
+  mutate(
+    hac.p = add_stars(hac.p)
+  ) %>% 
+  format_number() %>% 
+  mutate(
+    coef = str_c(coef,hac.p),
+    hac.se = str_c("(",hac.se,")")
+  ) %>% 
+  select(term:hac.se) %>% 
+  pivot_longer(-term, names_to = "stat")
+
+mm <- immig_kl %>% 
+  map_dfr(
+    function(x) x$result$Spatial_Parameters
+  ) %>% 
+  mutate(
+    id = row_number()
+  ) %>% 
+  slice_min(loglik) %>% 
+  pull(id)
+
+ikl  <- immig_kl[[mm]]$result$HAC %>% 
+  as_tibble(rownames = "term") %>% 
+  filter(str_detect(term,"so2")) %>% 
+  mutate(
+    hac.p = add_stars(hac.p)
+  ) %>% 
+  format_number() %>% 
+  mutate(
+    coef = str_c(coef,hac.p),
+    hac.se = str_c("(",hac.se,")")
+  ) %>% 
+  select(term:hac.se) %>% 
+  pivot_longer(-term, names_to = "stat")
+
+mm <- netm_kl %>% 
+  map_dfr(
+    function(x) x$result$Spatial_Parameters
+  ) %>% 
+  mutate(
+    id = row_number()
+  ) %>% 
+  slice_min(loglik) %>% 
+  pull(id)
+
+nkl <- netm_kl[[mm]]$result$HAC %>% 
+  as_tibble(rownames = "term") %>% 
+  filter(str_detect(term,"so2")) %>% 
+  mutate(
+    hac.p = add_stars(hac.p)
+  ) %>% 
+  format_number() %>% 
+  mutate(
+    coef = str_c(coef,hac.p),
+    hac.se = str_c("(",hac.se,")")
+  ) %>% 
+  select(term:hac.se) %>% 
+  pivot_longer(-term, names_to = "stat")
+
+list(ekl,ikl,nkl) %>% 
+  reduce(left_join, by = c("term","stat")) %>% 
+  select(-stat) 
+```
+
+
+## Placebo
+
+```{r}
+rdata_placebo <- rdata_mig %>%
+  filter(period %in% c("prior")) %>%
+  mutate(
+    period = case_when(
+      year < 1987 ~ "prior",
+      year >= 1987 ~ "after"
+    )
+  )
+
+modell_nl %>% 
+  map(felm, data = rdata_placebo) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  delete_rows() %>% 
+  select(term, emig_rate, immig_rate, netm_rate) 
+
+
+
+modell_nl %>% 
+  map(felm, data = rdata_placebo) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  delete_rows() %>% 
+  select(term, emig_rate, immig_rate, netm_rate) 
+
+```
+
+
+## Factors
+
+### Benefits
+
+```{r}
+rdata_benefits <- rdata_mig %>% filter(so2avg94 <= 40)
+```
+
+#### Indicator variable
+```{r}
+modell_benefits %>% 
+  map(felm, data = rdata_benefits) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  select(term, stat, indi = emig_rate)
+```
+
+#### Treatment intensity
+```{r}
+modell_benefitsti %>% 
+  map(felm, data = rdata_benefits) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  select(term, stat, ti = emig_rate)
+```
+
+### Social capital
+```{r}
+m50 <- modell_nl %>% 
+  map(felm, data = filter(rdata_mig, ger_share < 50)) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  #delete_rows() %>% 
+  select(term, stat, e50 = emig_rate)
+
+m50p <- modell_nl %>% 
+  map(felm, data = filter(rdata_mig, ger_share >= 50)) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  #delete_rows() %>% 
+  select(term, stat, e50p = emig_rate)
+
+m75 <- modell_nl %>% 
+  map(felm, data = filter(rdata_mig, ger_share < 75)) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  #delete_rows() %>% 
+  select(term, stat, e75 = emig_rate)
+
+m75p <- modell_nl %>% 
+  map(felm, data = filter(rdata_mig, ger_share >= 75)) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  #delete_rows() %>% 
+  select(term, stat, e75p = emig_rate)
+
+list(m50,m50p,m75,m75p) %>% 
+  reduce(full_join) %>% 
+  delete_rows() %>% 
+  select(-stat)
+```
+
+### Man-made amenities availability
+
+#### Education & health
+```{r}
+rdata_mma <- rdata_mig %>% 
+  select(starts_with("group")) %>% 
+  summarise(across(everything(),median)) %>% 
+  rename_all(function(x) str_c(x,"_median")) %>% 
+  bind_cols(rdata_mig,.)
+
+
+g1_0 <- modell_nl %>% 
+  map(felm, data = filter(rdata_mma, group1_0km <= group1_0km_median)) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  delete_rows() %>% 
+  select(term, emig_rate, immig_rate, netm_rate)
+
+modell_nl %>% 
+  map(felm, data = filter(rdata_mma, group1_0km > group1_0km_median)) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  delete_rows() %>% 
+  select(emig_rate_a = emig_rate, immig_rate_a = immig_rate, netm_rate_a = netm_rate) %>% 
+  bind_cols(g1_0,.) %>% 
+  select(term,starts_with("emig"),starts_with("immig"),starts_with("netm"))
+```
+
+  
+#### Culture & sports
+```{r}
+g2_0 <- modell_nl %>% 
+  map(felm, data = filter(rdata_mma, group2_0km <= group2_0km_median)) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  delete_rows() %>% 
+  select(term, emig_rate, immig_rate, netm_rate) 
+
+modell_nl %>% 
+  map(felm, data = filter(rdata_mma, group2_0km > group2_0km_median)) %>% 
+  map(felm_column) %>% 
+  reduce(full_join)%>% 
+  delete_rows() %>% 
+  select(emig_rate_a = emig_rate, immig_rate_a = immig_rate, netm_rate_a = netm_rate) %>% 
+  bind_cols(g2_0,.) %>% 
+  select(term,starts_with("emig"),starts_with("immig"),starts_with("netm"))
+```
+
+#### Public administration facilities & utilities
+```{r}
+g3_0 <- modell_nl %>% 
+  map(felm, data = filter(rdata_mma, group3_0km <= group3_0km_median)) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  delete_rows() %>% 
+  select(term, emig_rate, immig_rate, netm_rate)
+
+modell_nl %>% 
+  map(felm, data = filter(rdata_mma, group3_0km > group3_0km_median)) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  delete_rows() %>% 
+  select(emig_rate_a = emig_rate, immig_rate_a = immig_rate, netm_rate_a = netm_rate) %>% 
+  bind_cols(g2_0,.) %>% 
+  select(term,starts_with("emig"),starts_with("immig"),starts_with("netm"))
+```
+
+#### Education & health (20 km)
+```{r}
+g1_0 <- modell_nl %>% 
+  map(felm, data = filter(rdata_mma, group1_20km <= group1_20km_median)) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  delete_rows() %>% 
+  select(term, emig_rate, immig_rate, netm_rate)
+
+modell_nl %>% 
+  map(felm, data = filter(rdata_mma, group1_20km > group1_20km_median)) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  delete_rows() %>% 
+  select(emig_rate_a = emig_rate, immig_rate_a = immig_rate, netm_rate_a = netm_rate) %>% 
+  bind_cols(g1_0,.) %>% 
+  select(term,starts_with("emig"),starts_with("immig"),starts_with("netm"))
+```
+
+#### Public administration facilities & utilities (20 km)
+```{r}
+g2_0 <- modell_nl %>% 
+  map(felm, data = filter(rdata_mma, group2_20km <= group2_20km_median)) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  delete_rows() %>% 
+  select(term, emig_rate, immig_rate, netm_rate) 
+
+modell_nl %>% 
+  map(felm, data = filter(rdata_mma, group2_20km > group2_20km_median)) %>% 
+  map(felm_column) %>% 
+  reduce(full_join)%>% 
+  delete_rows() %>% 
+  select(emig_rate_a = emig_rate, immig_rate_a = immig_rate, netm_rate_a = netm_rate) %>% 
+  bind_cols(g2_0,.) %>% 
+  select(term,starts_with("emig"),starts_with("immig"),starts_with("netm"))
+```
+
+#### Public administration facilities & utilities (20 km)
+```{r}
+g3_0 <- modell_nl %>% 
+  map(felm, data = filter(rdata_mma, group3_20km <= group3_20km_median)) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  delete_rows() %>% 
+  select(term, emig_rate, immig_rate, netm_rate)
+
+modell_nl %>% 
+  map(felm, data = filter(rdata_mma, group3_20km > group3_20km_median)) %>% 
+  map(felm_column) %>% 
+  reduce(full_join) %>% 
+  delete_rows() %>% 
+  select(emig_rate_a = emig_rate, immig_rate_a = immig_rate, netm_rate_a = netm_rate) %>% 
+  bind_cols(g2_0,.) %>% 
+  select(term,starts_with("emig"),starts_with("immig"),starts_with("netm")) %>% 
+  print_latex("FIGURES/mma20_g3.tex")
+```
+
+## Air pollution and age and education structure
+
+```{r}
+model_structure <- as.Formula(
+  X ~ I(period == "after" & so2avg94 == 40) +
+  I(period == "after" & so2avg94 == 50) +
+  I(period == "after" & so2avg94 == 60) + year:period:area_segment | KOD_OBEC + I(period == "after") | 0 | KOD_OBEC
+)
+
+model_structure_rc <- as.Formula(
+  X ~ I(period == "after" & so2avg94 == 40) +
+  I(period == "after" & so2avg94 == 50) +
+  I(period == "after" & so2avg94 == 60) | KOD_OBEC + area_time | 0 | KOD_OBEC
+)
+```
+
+
+```{r}
+data_structure <- rdata %>% 
+  filter(year %in% c(1980,1991,2001,2011)) %>% 
+  filter(so2avg94 <= 60) %>% 
+  mutate(
+    area_time = str_c("FE",area_segment,"_",year),
+    period = ifelse(year < 1995, "prior", "after")
+  )
+```
+
+```{r}
+names(data_structure)
+depv <- c("age_20_29","age_30_39","age_40_49","age_50_59","age_60_69","age_70_79","edu_low_sh","edu_sec_sh","edu_ter_sh")
+
+data_structure %>% 
+  select(KOD_OBEC,year,any_of(depv)) %>% 
+  pivot_longer(-c(KOD_OBEC,year)) %>%
+  drop_na() %>% 
+  group_by(name,year) %>% 
+  summarise(
+    obs = n(),
+    .groups = "drop"
+  )
+  
+list(
+  update(model_structure, age_20_29 ~ .),
+  update(model_structure, age_30_39 ~ .),
+  update(model_structure, age_40_49 ~ .),
+  update(model_structure, age_50_59 ~ .),
+  update(model_structure, age_60_69 ~ .),
+  update(model_structure, edu_low_sh ~ .),
+  update(model_structure, edu_sec_sh ~ .),
+  update(model_structure, edu_ter_sh ~ .)
+) %>% 
+map(felm, data = data_structure) %>% 
+ map(felm_column) %>% 
+  reduce(full_join) %>% 
+  delete_rows() %>% 
+  mutate(
+    term = ifelse(stat == "std.error","",term)
+  ) 
+```
+
+## PTA test
+### Emigration rate
+```{r}
+testd <- rdata_mig %>%
+  filter(period == "prior") %>% 
+  filter(so2avg94 < 70)
+
+testf <- as.Formula(X ~ I(so2avg94 == 40 & year == 1983) +
+  I(so2avg94 == 40 & year == 1984) +
+I(so2avg94 == 40 & year == 1985) +
+I(so2avg94 == 40 & year == 1986) +
+I(so2avg94 == 40 & year == 1987) +
+  I(so2avg94 == 40 & year == 1988) +
+  I(so2avg94 == 50 & year == 1983) +
+  I(so2avg94 == 50 & year == 1984) +
+I(so2avg94 == 50 & year == 1985) +
+I(so2avg94 == 50 & year == 1986) +
+I(so2avg94 == 50 & year == 1987) +
+  I(so2avg94 == 50 & year == 1988) +
+  I(so2avg94 == 60 & year == 1983) +
+  I(so2avg94 == 60 & year == 1984) +
+I(so2avg94 == 60 & year == 1985) +
+I(so2avg94 == 60 & year == 1986) +
+I(so2avg94 == 60 & year == 1987) +
+  I(so2avg94 == 60 & year == 1988) | KOD_OBEC | 0 | KOD_OBEC)  # + year:area_segment
+
+felm(update(testf, emig_rate ~ .), data = testd) %>% 
+  tidy(conf.int = TRUE, se.type = "cluster") %>% 
+  filter(!str_detect(term,"segment")) %>% 
+  mutate(
+    year = str_extract(term,"\\d{4}") %>% as.double(),
+    so2 = str_extract(term,"94 == \\d{2}") %>% str_remove("94 ==")
+  ) %>% 
+  ggplot(
+    aes(x = as.factor(year), group = so2)
+  ) +
+  geom_hline(
+    yintercept = 0,
+    linetype = 3,
+    lwd = 0.3
+  ) +
+  geom_linerange(
+    aes(ymin = conf.low, ymax = conf.high),
+    position = position_dodge(width = 0.3)
+  ) +
+  geom_point(
+    aes(y = estimate, shape = so2),
+    position = position_dodge(width = 0.3),
+    fill = "white"
+  ) +
+  scale_shape_discrete(
+    #name = "Sulfur dioxide\nconcentration (1994)",
+    name = expression(SO[2] * " concentration (1994)"),
+    labels = c(
+      "40" = expression("40" * mu * "g"/m^3),
+      "50" = expression("50" * mu * "g"/m^3),
+      "60" = expression("60" * mu * "g"/m^3)
+    )
+  ) +
+  scale_y_continuous(
+    name = "Difference from the reference [p.p.]"
+  ) +
+  theme_classic(base_family = "Times") +
+  theme(
+    axis.title.x = element_blank()
+  )
+```
+
+### Immigration rate
+```{r}
+felm(update(testf, immig_rate ~ .), data = testd) %>% 
+  tidy(conf.int = TRUE, se.type = "cluster") %>% 
+  filter(!str_detect(term,"segment")) %>% 
+  mutate(
+    year = str_extract(term,"\\d{4}") %>% as.double(),
+    so2 = str_extract(term,"94 == \\d{2}") %>% str_remove("94 ==")
+  ) %>% 
+  ggplot(
+    aes(x = as.factor(year), group = so2)
+  ) +
+  geom_hline(
+    yintercept = 0,
+    linetype = 3,
+    lwd = 0.3
+  ) +
+  geom_linerange(
+    aes(ymin = conf.low, ymax = conf.high),
+    position = position_dodge(width = 0.3)
+  ) +
+  geom_point(
+    aes(y = estimate, shape = so2),
+    position = position_dodge(width = 0.3),
+    fill = "white"
+  ) +
+  scale_shape_discrete(
+    #name = "Sulfur dioxide\nconcentration (1994)",
+    name = expression(SO[2] * " concentration (1994)"),
+    labels = c(
+      "40" = expression("40" * mu * "g"/m^3),
+      "50" = expression("50" * mu * "g"/m^3),
+      "60" = expression("60" * mu * "g"/m^3)
+    )
+  ) +
+  scale_y_continuous(
+    name = "Difference from the reference [p.p.]"
+  ) +
+  theme_classic(base_family = "Times") +
+  theme(
+    axis.title.x = element_blank()
+  )
+```
+
+### Net migration rate
+```{r}
+felm(update(testf, netm_rate ~ .), data = testd) %>% 
+  tidy(conf.int = TRUE) %>% 
+  mutate(
+    year = str_extract(term,"\\d{4}") %>% as.double(),
+    so2 = str_extract(term,"94 == \\d{2}") %>% str_remove("94 ==")
+  ) %>% 
+  filter(!str_detect(term,"segment")) %>% 
+  ggplot(
+    aes(x = as.factor(year), group = so2)
+  ) +
+  geom_hline(
+    yintercept = 0,
+    linetype = 3,
+    lwd = 0.3
+  ) +
+  geom_linerange(
+    aes(ymin = conf.low, ymax = conf.high),
+    position = position_dodge(width = 0.3)
+  ) +
+  geom_point(
+    aes(y = estimate, shape = so2),
+    position = position_dodge(width = 0.3),
+    fill = "white"
+  ) +
+  scale_shape_discrete(
+    #name = "Sulfur dioxide\nconcentration (1994)",
+    name = expression(SO[2] * " concentration (1994)"),
+    labels = c(
+      "40" = expression("40" * mu * "g"/m^3),
+      "50" = expression("50" * mu * "g"/m^3),
+      "60" = expression("60" * mu * "g"/m^3)
+    )
+  ) +
+  scale_y_continuous(
+    name = "Difference from the reference [p.p.]"
+  ) +
+  theme_classic(base_family = "Times") +
+  theme(
+    axis.title.x = element_blank()
+  )
+```
