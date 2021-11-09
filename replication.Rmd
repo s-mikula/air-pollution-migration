@@ -38,30 +38,20 @@ library(patchwork)
 
 ## Load data
 
-The replication package does not contain actual data as these cannot be publicly shared due to legal reasons. 
-
-The attached file `data_replication.RData` contains table which allows user to test our code, however, it will not yield results reported in the paper. 
-
-Procedure used to generate this table follows (original `rdata` variable is a table with the actual dataset):
-
-```{r}
-# rdata <- rdata %>%
-#   mutate(
-#     across(
-#       -c(KOD_OBEC:year),
-#       sample,
-#       size = nrow(rdata),
-#       replace = FALSE
-#     )
-#   )
-# 
-# save(rdata, file = "data_replication.RData")
-```
+The replication package does not contain full data set as municipality reference points cannot be publicly shared due to legal reasons. 
 
 Load data:
 
 ```{r}
-#load("data_replication.RData")
+# rdata %>% 
+#   select(-contains("refpoint")) %>% 
+#   # Remove auxiliary variables not used in the analysis
+#   select(-starts_with("pp")) %>% 
+#   select(-PHAdist,-CZEdist,-TRI)
+# 
+# save(rdata, file = "data_replication.RData")
+
+load("data_replication.RData")
 ```
 
 ### Variables 
@@ -118,27 +108,12 @@ edu_ter_sh_nn = "Share of tertiary educated (census, nearest neighbor)",
 edu_low_sh_lin = "Share of primary educated (census, linear)",
 edu_sec_sh_lin = "Share of secondary educated (census, linear)",
 edu_ter_sh_lin = "Share of tertiary educated (census, linear)",
-ppdist_Komorany = "Distance to a power plant (Komorany, km)",
-ppdist_Ledvice = "Distance to a power plant (Ledvice, km)",
-ppdist_Pocerady = "Distance to a power plant (Pocerady, km)",
-ppdist_Prunerov = "Distance to a power plant (Prunerov, km)",
-ppdist_Tusimice = "Distance to a power plant (Tusimice, km)",
-ppdist_Litvinov = "Distance to a power plant (Litvinov, km)",
-ppprox_Komorany = "Power plant in municipality (Komorany, 0 = no, 1 = yes, 2 = neighboring municipalities)",
-ppprox_Ledvice = "Power plant in municipality (Ledvice, 0 = no, 1 = yes, 2 = neighboring municipalities)",
-ppprox_Litvinov = "Power plant in municipality (Litvinov, 0 = no, 1 = yes, 2 = neighboring municipalities)",
-ppprox_Pocerady = "Power plant in municipality (Pocerady, 0 = no, 1 = yes, 2 = neighboring municipalities)",
-ppprox_Prunerov = "Power plant in municipality (Prunerov, 0 = no, 1 = yes, 2 = neighboring municipalities)",
-ppprox_Tusimice = "Power plant in municipality (Tusimice, 0 = no, 1 = yes, 2 = neighboring municipalities)",
 ger_share = "Share of ethnic Germans in 1930",
-PHAdist = "Distance to Prague (country capital)",
-CZdist = "Distance to the country border",
 altitude = "Altitude (m)",
-TRI = "Terrain roughness",
 Udos = "Unemployment rate (U/Pop 15-64)",
 area_segment = "Area ID",
-refpoint_lon = "Municipality reference point: longitude",
-refpoint_lat = "Municipality reference point: latitude",
+*refpoint_lon = "Municipality reference point: longitude",
+*refpoint_lat = "Municipality reference point: latitude",
 centroid_lon = "Municipality centroid: longitude",
 centroid_lat = "Municipality centroid: latitude",
 group1_0km = "Number of man-made amenities in the municipality (Group 1)",
@@ -148,6 +123,7 @@ group1_20km = "Number of man-made amenities within 20 km driving distance (Group
 group2_20km = "Number of man-made amenities within 20 km driving distance (Group 2)",
 group3_20km = "Number of man-made amenities within 20 km driving distance (Group 3)"
 
+*) Municipality reference points cannot be shared publicly. Reference points can be purchased from the Czech Statistical Office (or approximated with centroids).
 
 ### Estimation sample
 
@@ -171,7 +147,7 @@ rdata_mig <- rdata %>%
 ### Time-inavriant characteristcs
 
 ```{r}
-rdata_mig %>% 
+dtab1 <- rdata_mig %>% 
   filter(year == 2011) %>% 
   select(KOD_OBEC,so2avg94, period, ger_share, altitude, starts_with("group")) %>% 
   pivot_longer(-c(KOD_OBEC,so2avg94, period)) %>% 
@@ -206,10 +182,11 @@ rdata_mig %>%
     ) %>% 
   select(variable,year,all,`30`:`60`)
 ```
+
 ### Characteristics changing over time
 
 ```{r}
-rdata %>% 
+dtab2 <- rdata %>% 
   filter(year %in% c(1980,1991,2001,2011)) %>% 
   mutate(
     period = case_when(
@@ -274,10 +251,70 @@ rdata %>%
   ) %>% 
   select(variable,year,all,`30`:`60`)
 ```
+#### Table 1
+```{r}
+dtab_all <- bind_rows(
+  dtab2,dtab1
+) %>% 
+  mutate(
+    variable = ifelse(variable == "",NA,variable),
+    year = ifelse(year == "",NA,year)
+  ) %>% 
+  fill(variable) %>% 
+  fill(year)
+
+bind_rows(
+  filter(dtab_all, str_detect(variable, "SO2"), str_detect(variable, "1994"), year == 1991),
+  filter(dtab_all, str_detect(variable, "SO2"), str_detect(variable, "2000"), year == 1991),
+  filter(dtab_all, str_detect(variable, "Pop")),
+  filter(dtab_all, str_detect(variable, "Alt")),
+  filter(dtab_all, str_detect(variable, "Germ"))
+) %>% 
+  mutate(
+    variable = ifelse(lag(variable) == variable & row_number() > 1,"",variable),
+    year = ifelse(lag(year) == year,"",year)
+  )
+```
+
+#### Table A.2
+
+```{r}
+bind_rows(
+  filter(dtab_all, str_detect(variable, "Share"), str_detect(variable, "age"))
+) %>% 
+  mutate(
+    variable = ifelse(lag(variable) == variable & row_number() > 1,"",variable),
+    year = ifelse(lag(year) == year & row_number() > 1,"",year)
+  )
+```
+
+#### Table A.3
+
+```{r}
+bind_rows(
+  filter(dtab_all, str_detect(variable, "Share"), str_detect(variable, "educ"))
+) %>% 
+  mutate(
+    variable = ifelse(lag(variable) == variable & row_number() > 1,"",variable),
+    year = ifelse(lag(year) == year & row_number() > 1,"",year)
+  )
+```
+
+#### Table A.4
+
+```{r}
+bind_rows(
+  filter(dtab_all, str_detect(variable, "Man-made"))
+) %>% 
+  mutate(
+    variable = ifelse(lag(variable) == variable & row_number() > 1,"",variable),
+    year = ifelse(variable == "","",year)
+  )
+```
 
 ### Migration
 
-#### Emigration rate
+
 ```{r}
 dtabs_print <- function(dtb){
   dtb %>% 
@@ -304,21 +341,25 @@ dtabs <- rdata_mig %>%
   pivot_longer(ends_with("rate")) %>% 
   split(.$name) %>% 
   map(function(x) descstat_lm(so2avg94, period, xdata = x))
-  
-dtabs$emig_rate %>% dtabs_print() #%>% print_latex("FIGURES/tab2_emig_rate.tex")  
 ```
+#### Table 2: Panel A: Emigration rate
 
-#### Immigration rate
 ```{r}
-dtabs$immig_rate %>% dtabs_print() #%>% print_latex("FIGURES/tab2_immig_rate.tex")  
+dtabs$emig_rate %>% dtabs_print()
 ```
 
-#### Net migration rate
+
+#### Table 2: Panel B: Immigration rate
 ```{r}
-dtabs$netm_rate %>% dtabs_print() #%>% print_latex("FIGURES/tab2_netm_rate.tex")  
+dtabs$immig_rate %>% dtabs_print() 
 ```
 
-### Number of municipalities
+#### Table 2: Panel C: Net migration rate
+```{r}
+dtabs$netm_rate %>% dtabs_print()
+```
+
+### Table 2: Number of municipalities
 
 ```{r}
 rdata_mig %>% 
@@ -334,8 +375,6 @@ rdata_mig %>%
   ) %>% 
   pivot_wider(names_from = so2avg94, values_from = Municipalities) 
 ```
-
-
 
 # Estimation
 
@@ -399,21 +438,27 @@ modell_benefitsti <- list(
 
 ## DiD (baseline)
 
+### Table 3: Panel A
+
 ```{r}
 modell_nl_40p %>% 
   map(felm, data = rdata_mig) %>% 
   map(felm_column) %>% 
-  reduce(full_join) %>% 
+  reduce(full_join, by = c("term", "stat")) %>% 
   delete_rows() %>% 
   mutate(
     term = ifelse(stat == "std.error","",term)
   ) %>% 
   select(term, emig_rate, immig_rate, netm_rate)
+```
 
+### Table 3: Panel B
+
+```{r}
 modell_nl %>% 
   map(felm, data = rdata_mig) %>% 
   map(felm_column) %>% 
-  reduce(full_join) %>% 
+  reduce(full_join, by = c("term", "stat")) %>% 
   delete_rows() %>% 
   mutate(
     term = ifelse(stat == "std.error","",term)
@@ -644,18 +689,18 @@ rctable <- bind_rows(rc1,rc2,rc3,rc4,rc5,rc6,rc7) %>%
   )
 ```
 
-### RC tests: Emigration rate
+### Table 4: Panel A: Emigration rate
 ```{r}
 rctable[[1]] %>% 
   slice(c(1:6,9,10))
 ```
-### RC tests: Immigration rate
+### Table 4: Panel B: Immigration rate
 ```{r}
 rctable[[2]] %>% 
   slice(c(1:6,9,10))
 ```
 
-### RC tests: Net migration rate
+### Table 4: Panel C: Net migration rate
 ```{r}
 rctable[[3]] %>% 
   slice(c(1:6,9,10))
@@ -995,16 +1040,22 @@ rdata_placebo <- rdata_mig %>%
       year >= 1987 ~ "after"
     )
   )
+```
 
+### Table 5: Panel A
+
+```{r}
 modell_nl %>% 
   map(felm, data = rdata_placebo) %>% 
   map(felm_column) %>% 
   reduce(full_join) %>% 
   delete_rows() %>% 
   select(term, emig_rate, immig_rate, netm_rate) 
+```
 
+### Table 5: Panel B
 
-
+```{r}
 modell_nl %>% 
   map(felm, data = rdata_placebo) %>% 
   map(felm_column) %>% 
@@ -1023,25 +1074,34 @@ modell_nl %>%
 rdata_benefits <- rdata_mig %>% filter(so2avg94 <= 40)
 ```
 
-#### Indicator variable
+#### Table 6
+
+##### Column (1): Indicator variable
 ```{r}
 modell_benefits %>% 
   map(felm, data = rdata_benefits) %>% 
   map(felm_column) %>% 
   reduce(full_join) %>% 
-  select(term, stat, indi = emig_rate)
+  select(term, stat, indi = emig_rate) %>% 
+  filter(!str_detect(stat,"fe")) %>% 
+  filter(!str_detect(term,"year")) %>% 
+  select(-stat)
 ```
 
-#### Treatment intensity
+##### Column (2): Treatment intensity
 ```{r}
 modell_benefitsti %>% 
   map(felm, data = rdata_benefits) %>% 
   map(felm_column) %>% 
   reduce(full_join) %>% 
-  select(term, stat, ti = emig_rate)
+  select(term, stat, ti = emig_rate) %>% 
+  filter(!str_detect(stat,"fe")) %>% 
+  filter(!str_detect(term,"year")) %>% 
+  select(-stat)
 ```
 
 ### Social capital
+#### Table 7
 ```{r}
 m50 <- modell_nl %>% 
   map(felm, data = filter(rdata_mig, ger_share < 50)) %>% 
@@ -1079,7 +1139,9 @@ list(m50,m50p,m75,m75p) %>%
 
 ### Man-made amenities availability
 
-#### Education & health
+#### Table 8
+
+##### Panel A: Education & health
 ```{r}
 rdata_mma <- rdata_mig %>% 
   select(starts_with("group")) %>% 
@@ -1106,7 +1168,7 @@ modell_nl %>%
 ```
 
   
-#### Culture & sports
+##### Panel B: Culture & sports
 ```{r}
 g2_0 <- modell_nl %>% 
   map(felm, data = filter(rdata_mma, group2_0km <= group2_0km_median)) %>% 
@@ -1125,7 +1187,7 @@ modell_nl %>%
   select(term,starts_with("emig"),starts_with("immig"),starts_with("netm"))
 ```
 
-#### Public administration facilities & utilities
+##### Panel C: Public administration facilities & utilities
 ```{r}
 g3_0 <- modell_nl %>% 
   map(felm, data = filter(rdata_mma, group3_0km <= group3_0km_median)) %>% 
@@ -1144,7 +1206,9 @@ modell_nl %>%
   select(term,starts_with("emig"),starts_with("immig"),starts_with("netm"))
 ```
 
-#### Education & health (20 km)
+#### Table 9
+
+##### Panel A: Education & health (20 km)
 ```{r}
 g1_0 <- modell_nl %>% 
   map(felm, data = filter(rdata_mma, group1_20km <= group1_20km_median)) %>% 
@@ -1163,7 +1227,7 @@ modell_nl %>%
   select(term,starts_with("emig"),starts_with("immig"),starts_with("netm"))
 ```
 
-#### Public administration facilities & utilities (20 km)
+##### Panel B: Public administration facilities & utilities (20 km)
 ```{r}
 g2_0 <- modell_nl %>% 
   map(felm, data = filter(rdata_mma, group2_20km <= group2_20km_median)) %>% 
@@ -1182,7 +1246,7 @@ modell_nl %>%
   select(term,starts_with("emig"),starts_with("immig"),starts_with("netm"))
 ```
 
-#### Public administration facilities & utilities (20 km)
+##### Panel C: Public administration facilities & utilities (20 km)
 ```{r}
 g3_0 <- modell_nl %>% 
   map(felm, data = filter(rdata_mma, group3_20km <= group3_20km_median)) %>% 
@@ -1198,8 +1262,7 @@ modell_nl %>%
   delete_rows() %>% 
   select(emig_rate_a = emig_rate, immig_rate_a = immig_rate, netm_rate_a = netm_rate) %>% 
   bind_cols(g2_0,.) %>% 
-  select(term,starts_with("emig"),starts_with("immig"),starts_with("netm")) %>% 
-  print_latex("FIGURES/mma20_g3.tex")
+  select(term,starts_with("emig"),starts_with("immig"),starts_with("netm"))
 ```
 
 ## Air pollution and age and education structure
@@ -1228,6 +1291,8 @@ data_structure <- rdata %>%
     period = ifelse(year < 1995, "prior", "after")
   )
 ```
+
+### Table 10
 
 ```{r}
 names(data_structure)
@@ -1263,7 +1328,7 @@ map(felm, data = data_structure) %>%
 ```
 
 ## PTA test
-### Emigration rate
+### Figure B.3: Emigration rate
 ```{r}
 testd <- rdata_mig %>%
   filter(period == "prior") %>% 
@@ -1330,7 +1395,7 @@ felm(update(testf, emig_rate ~ .), data = testd) %>%
   )
 ```
 
-### Immigration rate
+### Figure B.4: Immigration rate
 ```{r}
 felm(update(testf, immig_rate ~ .), data = testd) %>% 
   tidy(conf.int = TRUE, se.type = "cluster") %>% 
@@ -1374,7 +1439,7 @@ felm(update(testf, immig_rate ~ .), data = testd) %>%
   )
 ```
 
-### Net migration rate
+### Figure B.5: Net migration rate
 ```{r}
 felm(update(testf, netm_rate ~ .), data = testd) %>% 
   tidy(conf.int = TRUE) %>% 
